@@ -20,3 +20,14 @@
 | `A_TOP` | Top highlight |
 | `A_VERTICAL` | Vertical highlight |
 | `A_CHARTEXT` | Bit-mask to extract a character |
+
+Lo que le comentaba el otro día a Sebastià es que creo que deberíamos priorizar hacer un prototipo funcional muy bien pulido de la misión principal, para “olvidarnos” de ella y centrarnos en otras funciones del CanSat.
+
+Resumo lo principal:
+
+temperatura del aire y presión atmosferica
+Botón de encendido y apagado.
+Batería o paneles solares.
+Sistema de recuperación (paracaídas).
+Comunicación entre CanSat y base (hay que implementar un sistema de fácil accesibilidad para activar o desactivar la comunicación).
+Localización.

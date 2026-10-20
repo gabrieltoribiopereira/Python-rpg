@@ -30,6 +30,8 @@ class Player(Entity):       #plantilla para el jugador a partir de los datos de 
 @dataclass
 class Enemy(Entity):        #lo mismo que con jugador
     damage: int = 1
+    speed: float = 1.0
+    charge: float = 0.0
 
 
 def in_bounds(x, y):
@@ -39,11 +41,21 @@ def in_bounds(x, y):
 def sign(n):
     return (n > 0) - (n < 0) #verificación del signo de n para moverse 1,-1 o 0
 
+
+ENEMY_TYPES = {
+    "goblin": {"hp": 10, "damage": 1, "speed": 2,   "char": "ꬋ"},
+    "orc":    {"hp": 30, "damage": 4, "speed": 0.5, "char": "O"},
+}
+
+
+def spawn(kind, x, y):
+    return Enemy(x, y, **ENEMY_TYPES[kind])
+
                                                         #esto es la clase game que es mas complejas porque
 class Game:                                             #tiene funciones dentro
     def __init__(self):                                 # basicamente representa la partida entera
         self.player = Player(3, 2, hp=100, char="@")    #define player
-        self.enemies = [Enemy(10, 5, hp=10, char="ꬋ")]  #define enemy
+        self.enemies = [spawn("goblin", 10, 5), spawn("orc", 30, 3)]  #define enemy
         self.rest_streak = 1                            #se crea la racha de descanso para su posterior acumulación
 
     def entity_at(self, x, y):                          #devuelve que entidad hay en la casilla si es que hay
@@ -86,24 +98,27 @@ class Game:                                             #tiene funciones dentro
     def enemy_turn(self): #esta funcion hace que el enemigo actue solo una vez
         p = self.player   #guardo las cordenadas del jugador
         for e in self.enemies:  #en este bucle se recorren los enemigos es decir "e" es un enemigo(si hay varios)
-            dx, dy = p.x - e.x, p.y - e.y #dx y dy es la diferencia entre el jugador y el enemigo
+            e.charge += e.speed
+            while e.charge >= 1:
+                e.charge -= 1
+                dx, dy = p.x - e.x, p.y - e.y #dx y dy es la diferencia entre el jugador y el enemigo
 
-            if abs(dx) + abs(dy) == 1:  # adyacente: ataca, no se mueve. tengo que pensarme si hacer ataque diagonal
-                p.hp -= e.damage        # porque por una parte visualmente es raro pero por otra la diagonal no es 1 sino raiz de 2
-                continue
+                if abs(dx) + abs(dy) == 1:  # adyacente: ataca, no se mueve. tengo que pensarme si hacer ataque diagonal
+                    p.hp -= e.damage        # porque por una parte visualmente es raro pero por otra la diagonal no es 1 sino raiz de 2
+                    continue
 
-            sx, sy = sign(dx), sign(dy) #utilizo la funcion creada anteriormente para moverme solo 1 casilla por turno comprobando el signo.
+                sx, sy = sign(dx), sign(dy) #utilizo la funcion creada anteriormente para moverme solo 1 casilla por turno comprobando el signo.
 
-            if abs(dx) >= abs(dy):          #orden para priorizar los movimientos
-                pasos = [(sx, 0), (0, sy)]
-            else:
-                pasos = [(0, sy), (sx, 0)]
+                if abs(dx) >= abs(dy):          #orden para priorizar los movimientos
+                    pasos = [(sx, 0), (0, sy)]
+                else:
+                    pasos = [(0, sy), (sx, 0)]
 
-            for mx, my in pasos:
-                if (mx, my) != (0, 0) and self.free(e.x + mx, e.y + my):    #verificar pasos
-                    e.x += mx
-                    e.y += my
-                    break
+                for mx, my in pasos:
+                    if (mx, my) != (0, 0) and self.free(e.x + mx, e.y + my):    #verificar pasos
+                        e.x += mx
+                        e.y += my
+                        break
 
 
 def draw_world(stdscr, game):
