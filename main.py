@@ -43,19 +43,19 @@ def sign(n):
 
 
 ENEMY_TYPES = {
-    "goblin": {"hp": 10, "damage": 1, "speed": 2,   "char": "ꬋ"},
+    "goblin": {"hp": 10, "damage": 1, "speed": 2,   "char": "g"},
     "orc":    {"hp": 30, "damage": 4, "speed": 0.5, "char": "O"},
 }
 
 
 def spawn(kind, x, y):
-    return Enemy(x, y, **ENEMY_TYPES[kind])
+    return Enemy(x, y, **ENEMY_TYPES[kind])             #spawn enemies
 
                                                         #esto es la clase game que es mas complejas porque
 class Game:                                             #tiene funciones dentro
     def __init__(self):                                 # basicamente representa la partida entera
         self.player = Player(3, 2, hp=100, char="@")    #define player
-        self.enemies = [spawn("goblin", 10, 5), spawn("orc", 30, 3)]  #define enemy
+        self.enemies = [spawn("goblin", 10, 5), spawn("orc", 30, 3)]  #spawn enemy
         self.rest_streak = 1                            #se crea la racha de descanso para su posterior acumulación
 
     def entity_at(self, x, y):                          #devuelve que entidad hay en la casilla si es que hay
@@ -68,7 +68,6 @@ class Game:                                             #tiene funciones dentro
         return in_bounds(x, y) and self.entity_at(x, y) is None     #si las cordenadas estan dentro de los
                                                                     #bordes y en la casilla no hay una entidad
     def player_turn(self, key):
-        """Devuelve True si el jugador consumió turno."""
         p = self.player
 
         if key == " ":                                                      #descanso
@@ -138,7 +137,7 @@ def draw_stats(win, game):
     p = game.player
     win.erase()
     win.box()
-    info = [f"Energy: {p.energy}/{p.max_energy}", f"Vida: {p.hp}/100", "Oro: 50"]
+    info = [f"Energy: {p.energy}/{p.max_energy}", f"Vida: {p.hp}/100"]
     for i, texto in enumerate(info):
         win.addstr(1 + i, 1, texto)
     win.noutrefresh()
