@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Funcionamiento.md",
+                "file": "implementación.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Funcionamiento"
+              "title": "implementación"
             }
           }
         ]
@@ -190,10 +190,13 @@
   },
   "active": "360867103a35236b",
   "lastOpenFiles": [
+    "prueba.py",
+    "lore.md",
+    "main.py",
+    "Funcionamiento.md",
     "colors.py",
     "implementación.md",
     "codewars.py",
-    "Funcionamiento.md",
     "cursesinfo.md",
     "image.png"
   ]

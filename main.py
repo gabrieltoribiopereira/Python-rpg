@@ -1,7 +1,8 @@
 import curses
 from dataclasses import dataclass
-from email import message
+import time
 import math
+
 ANCHO, ALTO = 10000, 10000
 MIN_FILAS, MIN_COLUMNAS = 20,100
 
@@ -32,29 +33,33 @@ class Player(Entity):       #plantilla para el jugador a partir de los datos de 
     energy: int = 100      #es decir un player es una entidad
     max_energy: int = 100
     damage: int = 3
-
+    last_hurt: float = 0.0
 
 @dataclass
 class Enemy(Entity):        #lo mismo que con jugador
     damage: int = 1
     speed: float = 1.0
     charge: float = 0.0
+
     def act(self, game):
         # El sistena de velocidad será igual para todos los enemigos
         self.charge+=self.speed #la carga de este enemigo se le suma la velocidad
         while self.charge >= 1:
             self.charge -= 1
             self.take_action(game)
+
     def take_action(self, game):
         #cuerpo a cuerpo
         p = game.player
         dx, dy = p.x - self.x, p.y - self.y
 
-        if abs(dx) +abs(dy)==1:
+        if abs(dx) +abs(dy) == 1:
             p.hp-=self.damage
+            p.last_hurt = time.time()
             add_message(f"{self.name} dealt {self.damage} to you ({p.hp}/100)", 26)
         else:
             self.step(game, dx, dy)
+
     def step(self, game, dx, dy, away=False):
         #funcion para moverse. Sirve tanto para perseguir como para alejar
         if away:
@@ -86,7 +91,18 @@ class Archer(Enemy): # Hereda de Enemy para aprovechar speed, charge y el métod
         if dist < self.min_dist:
             self.step(game, dx, dy, away=True) # Huye si está muy cerca
         elif dist <= self.range and self.clear_shot(game):
-            p.hp -= self.damage                # Dispara si está a rango y alineado
+            dx, dy = sign(p.x - self.x), sign(p.y - self.y)
+            # Asigna la flecha correcta según la dirección
+            if dx == 1: char_flecha = "→"
+            elif dx == -1: char_flecha = "←"
+            elif dy == 1: char_flecha = "↓"
+            else: char_flecha = "↑"
+
+            game.projectiles.append({
+                "x": self.x, "y": self.y, "tx": p.x, "ty": p.y,
+                "dx": dx, "dy":dy, "damage": self.damage, "shooter": self.name,
+                "char": char_flecha
+            })
         else:
             self.step(game, dx, dy)            # Se acerca para buscar ángulo
 
@@ -107,7 +123,7 @@ class Archer(Enemy): # Hereda de Enemy para aprovechar speed, charge y el métod
 
 
 ENEMY_TYPES = {
-    "goblin": {"cls": Enemy,"hp": 10, "damage": 1, "speed": 2,   "char": "g", "name": "goblin"},
+    "goblin": {"cls": Enemy,"hp": 10, "damage": 1, "speed": 2.0,   "char": "g", "name": "goblin"},
     "orc":    {"cls": Enemy,"hp": 30, "damage": 4, "speed": 0.5, "char": "O","name": "orc"},
     "archer":    {"cls": Archer,"hp": 30, "damage": 4, "speed": 0.5, "char": "a", "range": 6, "min_dist":2,"name": "archer"},
 }
@@ -129,6 +145,8 @@ class Game:                                             #tiene funciones dentro
             (6,5):"#",
             (5000, 8000): "#" # Coordenada extrema sin gastar RAM intermedia
         }
+        self.projectiles = []
+
     def get_tile(self, x, y):
         if 0<= x < 10000 and 0<= y< 10000:
             return self.mapa.get((x,y), ".")
@@ -137,6 +155,7 @@ class Game:                                             #tiene funciones dentro
             return 0 <= x < 10000 and 0 <= y < 10000 \
                 and self.mapa.get((x, y)) != "#" \
                 and self.entity_at(x, y) is None
+
     def entity_at(self, x, y):                          #devuelve que entidad hay en la casilla si es que hay
         for e in (self.player, *self.enemies):          #el "*"desempaqueta la lista por si hay mas enemigos
             if e.x == x and e.y == y:
@@ -197,10 +216,10 @@ def draw_world(stdscr, game):
     MAX_MUNDO_X = 10000
     MAX_MUNDO_Y = 10000
     cam_x = max(0, min(cam_x, MAX_MUNDO_X -WIDTH_VIEW))# la parte de min() lo que hace es calcular la posición ideal cuando estas en el borde. En el borde la camara no se mueve porque esta
-    cam_y = max(0, min(cam_y, MAX_MUNDO_Y -WIDTH_VIEW))
+    cam_y = max(0, min(cam_y, MAX_MUNDO_Y -HIGHT_VIEW))
     stdscr.erase()
 
-    # 1. Dibujar el terreno visible
+    # Dibujar el terreno visible
     for y in range(HIGHT_VIEW):
         for x in range(WIDTH_VIEW):
 
@@ -213,21 +232,41 @@ def draw_world(stdscr, game):
             except curses.error:
                 pass # Evita errores si se dibuja en la última celda de la terminal
 
-    # 2. Dibujar enemigos que estén dentro del campo de visión
+    # Dibujar enemigos que estén dentro del campo de visión
     for e in game.enemies:
         if cam_x <= e.x < cam_x + WIDTH_VIEW and cam_y <= e.y < cam_y + HIGHT_VIEW:
             # Posición en pantalla = Posición real - Posición de la cámara
             pantalla_x = e.x - cam_x
             pantalla_y = e.y - cam_y
-            stdscr.addch(pantalla_y, pantalla_x, e.char, curses.color_pair(26))
+            try:
+                stdscr.addch(pantalla_y, pantalla_x, e.char, curses.color_pair(26))
+            except curses.error:
+                pass
 
-    # 3. Dibujar al jugador (siempre en el centro relativo de la cámara)
+    for proj in game.projectiles:
+        pantalla_px = proj["x"] - cam_x
+        pantalla_py = proj["y"] - cam_y
+        if 0 <= pantalla_px < WIDTH_VIEW and 0 <= pantalla_py < HIGHT_VIEW:
+            try:
+                stdscr.addstr(pantalla_py, pantalla_px, proj["char"], curses.color_pair(27))
+            except curses.error:
+                pass
+
+    # Dibujar al jugador (siempre en el centro relativo de la cámara)
     p = game.player
     pantalla_px = p.x - cam_x
     pantalla_py = p.y - cam_y
-    stdscr.addch(pantalla_py, pantalla_px, p.char, curses.color_pair(25))
 
-    # 4. Mensajes del sistema
+    parpadeo_activo = time.time() - p.last_hurt < 2.0
+    ocultar_sprite = parpadeo_activo and int(time.time() * 10) % 2 == 0
+
+    if not ocultar_sprite:
+        try:
+            stdscr.addch(pantalla_py, pantalla_px, p.char, curses.color_pair(25))
+        except curses.error:
+            pass
+
+    # Mensajes del sistema
     if p.energy <= 0:
         stdscr.addstr(HIGHT_VIEW, 0, "You need to rest! (Press SPACE)",curses.color_pair(25))
 
@@ -256,7 +295,7 @@ def draw_stats(win, game): #la ventana se crea en main()
     p = game.player
     win.erase()
     win.box()
-    info = [f"Energy: {p.energy}/{p.max_energy}", f"Healt: {p.hp}/100", f"X={p.x}",f"Y={p.y}"]
+    info = [f"Energy: {p.energy}/{p.max_energy}", f"Health: {p.hp}/100", f"X={p.x}",f"Y={p.y}"]
     for i, texto in enumerate(info):
         win.addstr(1 + i, 1, texto)
     win.noutrefresh()
@@ -274,33 +313,54 @@ def main(stdscr):
     curses.curs_set(0)
     curses.init_pair(25, curses.COLOR_GREEN, curses.COLOR_BLACK)#color de personaje
     curses.init_pair(26, curses.COLOR_RED, curses.COLOR_BLACK)#color del enemigo
+    curses.init_pair(27, curses.COLOR_YELLOW, curses.COLOR_BLACK)
     win_stats = curses.newwin(10, 20, 0, 105 + 5)
     win_log = curses.newwin(10, 100, 21, 0)
     DEGRADED = 24
-    for k in range(DEGRADED):
-        # Calcula el tono de verde (escala 0-1000)
-        green = int(120 + (800 - 120) * k / (DEGRADED - 1))
-        curses.init_color(100 + k, 0, green, 0)
+    if curses.can_change_color():
+        for k in range(DEGRADED):
+            # Calcula el tono de verde (escala 0-1000)
+            green = int(120 + (800 - 120) * k / (DEGRADED - 1))
+            curses.init_color(100 + k, 0, green, 0)
 
-        # Crea el par: ID (1 a 24), Color de Texto (Negro), Color de Fondo (Tono Verde)
-        curses.init_pair(k + 1, curses.COLOR_BLACK, 100 + k)
+            # Crea el par: ID (1 a 24), Color de Texto (Negro), Color de Fondo (Tono Verde)
+            curses.init_pair(k + 1, curses.COLOR_BLACK, 100 + k)
+    stdscr.timeout(50)
     game = Game()
     while game.player.hp > 0:
+        if game.projectiles:
+            for proj in game.projectiles[:]:
+                proj["x"]+=proj["dx"]
+                proj["y"]+=proj["dy"]
+                if (proj["x"], proj["y"]) == (proj["tx"], proj["ty"]):
+                    game.player.hp-=proj["damage"]
+                    game.player.last_hurt=time.time()
+                    add_message(f"The {proj['shooter']} shot you for {proj['damage']} damage!", 26)
+                    game.projectiles.remove(proj)
+            draw_world(stdscr, game)
+            curses.doupdate()
+            time.sleep(0.05)
+            continue
         draw_world(stdscr, game)
         draw_stats(win_stats, game)
         draw_log(win_log)
         curses.doupdate()
 
-        key = stdscr.getkey()
+        try:
+            key = stdscr.getkey()
+        except curses.error:
+            key = None
+
         if key == "q":
             break
-        if game.player_turn(key):
+        if key and game.player_turn(key):
             game.enemy_turn()
 
     stdscr.erase()
     msg = "¡Has ganado!" if game.player.hp > 0 else "¡Has muerto!"
     stdscr.addstr(ALTO // 2, (ANCHO - len(msg)) // 2, msg)
     stdscr.refresh()
+    stdscr.timeout(-1)
     stdscr.getkey()
 
 curses.wrapper(main)
