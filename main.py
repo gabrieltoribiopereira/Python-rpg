@@ -1,6 +1,6 @@
 import curses
 from dataclasses import dataclass
-
+import math
 ANCHO, ALTO = 10000, 10000
 MIN_FILAS, MIN_COLUMNAS = 20,100
 
@@ -27,8 +27,8 @@ class Entity: #una clase es un concepto que no he usado antes pero que es muy ú
 
 @dataclass
 class Player(Entity):       #plantilla para el jugador a partir de los datos de la entidad
-    energy: int = 100        #es decir un player es una entidad
-    max_energy: int = 100
+    energy: int = 10000        #es decir un player es una entidad
+    max_energy: int = 100000
     damage: int = 3
 
 
@@ -117,7 +117,7 @@ def spawn(kind, x, y):                  #spawn enemies
                                                     #esto es la clase game que es mas complejas porque
 class Game:                                             #tiene funciones dentro
     def __init__(self):                                 # basicamente representa la partida entera
-        self.player = Player(3, 2, hp=100, char="@")    #define player
+        self.player = Player(5000, 5000, hp=100, char="@")    #define player
         self.enemies = [spawn("archer", 10, 4 ),spawn("goblin", 5, 4 ),spawn("orc", 3, 7 )]  #spawn enemy
         self.rest_streak = 1  #se crea la racha de descanso para su posterior acumulación
         self.effects=[]
@@ -172,6 +172,18 @@ class Game:                                             #tiene funciones dentro
             e.act(self)
 
 
+
+def get_grass_color(x, y):
+    wave1 = math.sin(x / 31.0) + math.cos(y / 29.0)
+    wave2 = math.sin((x + y) / 13.0)
+    wave3 = math.sin(x / 7.0) * math.cos(y / 5.0)
+
+    noise = (wave1 + wave2 + wave3 + 4.0) / 8.0
+    noise = max(0.0, min(1.0, noise))
+
+    index = int(noise * 23)
+    return max(1, min(24, index + 1))
+
 def draw_world(stdscr, game):
     WIDTH_VIEW = 100
     HIGHT_VIEW = 20  #vista en terminal
@@ -188,11 +200,14 @@ def draw_world(stdscr, game):
     # 1. Dibujar el terreno visible
     for y in range(HIGHT_VIEW):
         for x in range(WIDTH_VIEW):
+            """I added world generation so now there is acttually the fealing of movement. The way this works is I create a pallet of 24 greens.
+            With a function that """
             world_x = cam_x + x
             world_y = cam_y + y
-            tile = game.get_tile(world_x, world_y) # dibuja el mundo a partir de la camara
+            color_id = get_grass_color(world_x, world_y)# dibuja el mundo a partir de la camara
+
             try:
-                stdscr.addch(y, x, tile)
+                stdscr.addch(y, x, " ", curses.color_pair(color_id))
             except curses.error:
                 pass # Evita errores si se dibuja en la última celda de la terminal
 
@@ -202,13 +217,13 @@ def draw_world(stdscr, game):
             # Posición en pantalla = Posición real - Posición de la cámara
             pantalla_x = e.x - cam_x
             pantalla_y = e.y - cam_y
-            stdscr.addch(pantalla_y, pantalla_x, e.char, curses.color_pair(2))
+            stdscr.addch(pantalla_y, pantalla_x, e.char, curses.color_pair(26))
 
     # 3. Dibujar al jugador (siempre en el centro relativo de la cámara)
     p = game.player
     pantalla_px = p.x - cam_x
     pantalla_py = p.y - cam_y
-    stdscr.addch(pantalla_py, pantalla_px, p.char, curses.color_pair(1))
+    stdscr.addch(pantalla_py, pantalla_px, p.char, curses.color_pair(25))
 
     # 4. Mensajes del sistema
     if p.energy <= 0:
@@ -237,10 +252,17 @@ def main(stdscr):
         )
 
     curses.curs_set(0)
-    curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
-    curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK)
+    curses.init_pair(25, curses.COLOR_GREEN, curses.COLOR_BLACK)#color de personaje
+    curses.init_pair(26, curses.COLOR_RED, curses.COLOR_BLACK)#color del enemigo
     win_stats = curses.newwin(10, 20, 0, 105 + 5)
+    DEGRADED = 24
+    for k in range(DEGRADED):
+        # Calcula el tono de verde (escala 0-1000)
+        green = int(120 + (800 - 120) * k / (DEGRADED - 1))
+        curses.init_color(100 + k, 0, green, 0)
 
+        # Crea el par: ID (1 a 24), Color de Texto (Negro), Color de Fondo (Tono Verde)
+        curses.init_pair(k + 1, curses.COLOR_BLACK, 100 + k)
     game = Game()
     while game.player.hp > 0:
         draw_world(stdscr, game)
