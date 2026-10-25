@@ -1,5 +1,6 @@
 import curses
 from dataclasses import dataclass
+from email import message
 import math
 ANCHO, ALTO = 10000, 10000
 MIN_FILAS, MIN_COLUMNAS = 20,100
@@ -23,12 +24,13 @@ class Entity: #una clase es un concepto que no he usado antes pero que es muy ú
     y: int
     hp: int
     char: str
+    name: str
 
 
 @dataclass
 class Player(Entity):       #plantilla para el jugador a partir de los datos de la entidad
-    energy: int = 10000        #es decir un player es una entidad
-    max_energy: int = 100000
+    energy: int = 100      #es decir un player es una entidad
+    max_energy: int = 100
     damage: int = 3
 
 
@@ -50,8 +52,9 @@ class Enemy(Entity):        #lo mismo que con jugador
 
         if abs(dx) +abs(dy)==1:
             p.hp-=self.damage
+            add_message(f"{self.name} dealt {self.damage} to you ({p.hp}/100)", 26)
         else:
-            self.step(game, dx, dy) #entender
+            self.step(game, dx, dy)
     def step(self, game, dx, dy, away=False):
         #funcion para moverse. Sirve tanto para perseguir como para alejar
         if away:
@@ -104,9 +107,9 @@ class Archer(Enemy): # Hereda de Enemy para aprovechar speed, charge y el métod
 
 
 ENEMY_TYPES = {
-    "goblin": {"cls": Enemy,"hp": 10, "damage": 1, "speed": 2,   "char": "g"},
-    "orc":    {"cls": Enemy,"hp": 30, "damage": 4, "speed": 0.5, "char": "O"},
-    "archer":    {"cls": Archer,"hp": 30, "damage": 4, "speed": 0.5, "char": "a", "range": 6, "min_dist":2},
+    "goblin": {"cls": Enemy,"hp": 10, "damage": 1, "speed": 2,   "char": "g", "name": "goblin"},
+    "orc":    {"cls": Enemy,"hp": 30, "damage": 4, "speed": 0.5, "char": "O","name": "orc"},
+    "archer":    {"cls": Archer,"hp": 30, "damage": 4, "speed": 0.5, "char": "a", "range": 6, "min_dist":2,"name": "archer"},
 }
 
 
@@ -117,7 +120,7 @@ def spawn(kind, x, y):                  #spawn enemies
                                                     #esto es la clase game que es mas complejas porque
 class Game:                                             #tiene funciones dentro
     def __init__(self):                                 # basicamente representa la partida entera
-        self.player = Player(5000, 5000, hp=100, char="@")    #define player
+        self.player = Player(0, 0, hp=100, char="@", name="player")    #define player
         self.enemies = [spawn("archer", 10, 4 ),spawn("goblin", 5, 4 ),spawn("orc", 3, 7 )]  #spawn enemy
         self.rest_streak = 1  #se crea la racha de descanso para su posterior acumulación
         self.effects=[]
@@ -146,6 +149,7 @@ class Game:                                             #tiene funciones dentro
         if key == " ":                                                      #descanso
             p.energy = min(p.energy + 2 * self.rest_streak, p.max_energy)
             self.rest_streak += 1
+            add_message(f"You rested! ({p.energy}/100)",25)
             return True
         self.rest_streak = 1
 
@@ -159,8 +163,9 @@ class Game:                                             #tiene funciones dentro
 
         target = self.entity_at(nx, ny)
         if target:                              # moverse hacia un enemigo = atacarlo
-            target.hp -= p.damage               #esto sería importante darle una vuelta para cuando implemente
-            if target.hp <= 0:                  #el ataque a distancia ataques magicos o cualquier paranoia
+            target.hp -= p.damage
+            add_message(f"You dealt {p.damage} damage to the {target.name}.",25)
+            if target.hp <= 0:
                 self.enemies.remove(target)
         else:
             p.x, p.y = nx, ny                   #si hay movimiento hay un gasto de energia
@@ -170,8 +175,6 @@ class Game:                                             #tiene funciones dentro
     def enemy_turn(self): #esta funcion hace que el enemigo actue solo una vez
         for e in self.enemies:
             e.act(self)
-
-
 
 def get_grass_color(x, y):
     wave1 = math.sin(x / 31.0) + math.cos(y / 29.0)
@@ -200,8 +203,7 @@ def draw_world(stdscr, game):
     # 1. Dibujar el terreno visible
     for y in range(HIGHT_VIEW):
         for x in range(WIDTH_VIEW):
-            """I added world generation so now there is acttually the fealing of movement. The way this works is I create a pallet of 24 greens.
-            With a function that """
+
             world_x = cam_x + x
             world_y = cam_y + y
             color_id = get_grass_color(world_x, world_y)# dibuja el mundo a partir de la camara
@@ -227,12 +229,30 @@ def draw_world(stdscr, game):
 
     # 4. Mensajes del sistema
     if p.energy <= 0:
-        stdscr.addstr(HIGHT_VIEW, 0, "You need to rest! (Press SPACE)")
+        stdscr.addstr(HIGHT_VIEW, 0, "You need to rest! (Press SPACE)",curses.color_pair(25))
 
     stdscr.noutrefresh()
+combat_log=[]
+MAX_MESSAGES= 8
+def add_message(text, color_id=0):
+    combat_log.append((text,color_id))
+    if len(combat_log) > MAX_MESSAGES:
+        combat_log.pop(0)
 
+def draw_log(win):
+    win.erase()
+    win.box()
+    win.addstr(0, 2, " Combat Log ")
 
-def draw_stats(win, game):
+    alto, ancho = win.getmaxyx()
+
+    for i, (mensaje, color_id) in enumerate(reversed(combat_log)):
+        if 1 + i < alto - 1:
+            win.addstr(1 + i, 1, mensaje, curses.color_pair(color_id))
+
+    win.noutrefresh()
+
+def draw_stats(win, game): #la ventana se crea en main()
     p = game.player
     win.erase()
     win.box()
@@ -255,6 +275,7 @@ def main(stdscr):
     curses.init_pair(25, curses.COLOR_GREEN, curses.COLOR_BLACK)#color de personaje
     curses.init_pair(26, curses.COLOR_RED, curses.COLOR_BLACK)#color del enemigo
     win_stats = curses.newwin(10, 20, 0, 105 + 5)
+    win_log = curses.newwin(10, 100, 21, 0)
     DEGRADED = 24
     for k in range(DEGRADED):
         # Calcula el tono de verde (escala 0-1000)
@@ -267,7 +288,7 @@ def main(stdscr):
     while game.player.hp > 0:
         draw_world(stdscr, game)
         draw_stats(win_stats, game)
-
+        draw_log(win_log)
         curses.doupdate()
 
         key = stdscr.getkey()
