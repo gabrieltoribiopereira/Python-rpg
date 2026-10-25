@@ -1,8 +1,8 @@
 import curses
 from dataclasses import dataclass
 
-ANCHO, ALTO = 50, 10
-MIN_FILAS, MIN_COLUMNAS = ALTO + 3, ANCHO + 25
+ANCHO, ALTO = 10000, 10000
+MIN_FILAS, MIN_COLUMNAS = 20,100
 
 MOVES = {
     "w": (0, -1), "KEY_UP": (0, -1),
@@ -17,7 +17,6 @@ def in_bounds(x, y):
 def sign(n):
     return (n > 0) - (n < 0) #verificación del signo de n para moverse 1,-1 o 0
 
-
 @dataclass
 class Entity: #una clase es un concepto que no he usado antes pero que es muy útil en este caso
     x: int    #ya que me define una "plantilla" para las entenidades en este caso
@@ -28,8 +27,8 @@ class Entity: #una clase es un concepto que no he usado antes pero que es muy ú
 
 @dataclass
 class Player(Entity):       #plantilla para el jugador a partir de los datos de la entidad
-    energy: int = 10        #es decir un player es una entidad
-    max_energy: int = 10
+    energy: int = 100        #es decir un player es una entidad
+    max_energy: int = 100
     damage: int = 3
 
 
@@ -104,7 +103,6 @@ class Archer(Enemy): # Hereda de Enemy para aprovechar speed, charge y el métod
         return True
 
 
-
 ENEMY_TYPES = {
     "goblin": {"cls": Enemy,"hp": 10, "damage": 1, "speed": 2,   "char": "g"},
     "orc":    {"cls": Enemy,"hp": 30, "damage": 4, "speed": 0.5, "char": "O"},
@@ -123,15 +121,24 @@ class Game:                                             #tiene funciones dentro
         self.enemies = [spawn("archer", 10, 4 ),spawn("goblin", 5, 4 ),spawn("orc", 3, 7 )]  #spawn enemy
         self.rest_streak = 1  #se crea la racha de descanso para su posterior acumulación
         self.effects=[]
-
+        self.mapa = {
+            (5,5):"#",
+            (6,5):"#",
+            (5000, 8000): "#" # Coordenada extrema sin gastar RAM intermedia
+        }
+    def get_tile(self, x, y):
+        if 0<= x < 10000 and 0<= y< 10000:
+            return self.mapa.get((x,y), ".")
+        return " "
+    def free(self, x, y):
+            return 0 <= x < 10000 and 0 <= y < 10000 \
+                and self.mapa.get((x, y)) != "#" \
+                and self.entity_at(x, y) is None
     def entity_at(self, x, y):                          #devuelve que entidad hay en la casilla si es que hay
         for e in (self.player, *self.enemies):          #el "*"desempaqueta la lista por si hay mas enemigos
             if e.x == x and e.y == y:
                 return e
         return None
-
-    def free(self, x, y):                                           #verifica si la casilla es valida
-        return in_bounds(x, y) and self.entity_at(x, y) is None     #si las cordenadas estan dentro de los
                                                                     #bordes y en la casilla no hay una entidad
     def player_turn(self, key):
         p = self.player
@@ -166,25 +173,55 @@ class Game:                                             #tiene funciones dentro
 
 
 def draw_world(stdscr, game):
+    WIDTH_VIEW = 100
+    HIGHT_VIEW = 20  #vista en terminal
 
+    # Calcular la posición de la cámara centrada en el jugador
+    cam_x = game.player.x - (WIDTH_VIEW // 2)
+    cam_y = game.player.y - (HIGHT_VIEW // 2)
+    MAX_MUNDO_X = 10000
+    MAX_MUNDO_Y = 10000
+    cam_x = max(0, min(cam_x, MAX_MUNDO_X -WIDTH_VIEW))# la parte de min() lo que hace es calcular la posición ideal cuando estas en el borde. En el borde la camara no se mueve porque esta
+    cam_y = max(0, min(cam_y, MAX_MUNDO_Y -WIDTH_VIEW))
     stdscr.erase()
-    for y in range(ALTO):
-        stdscr.addstr(y, 0, "." * ANCHO)
-    for e in game.enemies:
-        stdscr.addch(e.y, e.x, e.char, curses.color_pair(2))
-    p = game.player
-    stdscr.addch(p.y, p.x, p.char, curses.color_pair(1))
-    if p.energy <= 0:
-        stdscr.addstr(ALTO + 2, 0, "You need to rest! (Press SPACE)")
-    stdscr.noutrefresh()
 
+    # 1. Dibujar el terreno visible
+    for y in range(HIGHT_VIEW):
+        for x in range(WIDTH_VIEW):
+            world_x = cam_x + x
+            world_y = cam_y + y
+            tile = game.get_tile(world_x, world_y) # dibuja el mundo a partir de la camara
+            try:
+                stdscr.addch(y, x, tile)
+            except curses.error:
+                pass # Evita errores si se dibuja en la última celda de la terminal
+
+    # 2. Dibujar enemigos que estén dentro del campo de visión
+    for e in game.enemies:
+        if cam_x <= e.x < cam_x + WIDTH_VIEW and cam_y <= e.y < cam_y + HIGHT_VIEW:
+            # Posición en pantalla = Posición real - Posición de la cámara
+            pantalla_x = e.x - cam_x
+            pantalla_y = e.y - cam_y
+            stdscr.addch(pantalla_y, pantalla_x, e.char, curses.color_pair(2))
+
+    # 3. Dibujar al jugador (siempre en el centro relativo de la cámara)
+    p = game.player
+    pantalla_px = p.x - cam_x
+    pantalla_py = p.y - cam_y
+    stdscr.addch(pantalla_py, pantalla_px, p.char, curses.color_pair(1))
+
+    # 4. Mensajes del sistema
+    if p.energy <= 0:
+        stdscr.addstr(HIGHT_VIEW, 0, "You need to rest! (Press SPACE)")
+
+    stdscr.noutrefresh()
 
 
 def draw_stats(win, game):
     p = game.player
     win.erase()
     win.box()
-    info = [f"Energy: {p.energy}/{p.max_energy}", f"Vida: {p.hp}/100"]
+    info = [f"Energy: {p.energy}/{p.max_energy}", f"Healt: {p.hp}/100", f"X={p.x}",f"Y={p.y}"]
     for i, texto in enumerate(info):
         win.addstr(1 + i, 1, texto)
     win.noutrefresh()
@@ -202,7 +239,7 @@ def main(stdscr):
     curses.curs_set(0)
     curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
     curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK)
-    win_stats = curses.newwin(10, 20, 0, ANCHO + 5)
+    win_stats = curses.newwin(10, 20, 0, 105 + 5)
 
     game = Game()
     while game.player.hp > 0:

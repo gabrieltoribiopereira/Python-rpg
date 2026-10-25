@@ -99,7 +99,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "Funcionamiento.md",
+                "file": "implementación.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -118,7 +118,7 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "Funcionamiento.md",
+                "file": "implementación.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
@@ -161,7 +161,7 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "Funcionamiento.md",
+                "file": "implementación.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
@@ -190,9 +190,10 @@
   },
   "active": "360867103a35236b",
   "lastOpenFiles": [
-    "cursesinfo.md",
+    "implementación.md",
+    "codewars.py",
     "Funcionamiento.md",
-    "image.png",
-    "implementación.md"
+    "cursesinfo.md",
+    "image.png"
   ]
 }
